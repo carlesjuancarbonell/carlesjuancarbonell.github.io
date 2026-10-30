@@ -67,7 +67,7 @@ jobs:
           const DIR = 'media/tiktok';
           const JSON_FILE = 'data/tiktok.json';
           const MAX = 12;
-          const HANDLE = 'zoqueteilustrado';
+          const HANDLE = 'zoqueteilustrao';
           const mask = (v) => { if (v) console.log(`::add-mask::${v}`); };
 
           if (!CK || !CS || !TK) {
