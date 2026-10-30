@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F3FD1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Conectar TikTok · Portfolio Carles Juan Carbonell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+*{box-sizing:border-box}
+html{background:#1F3FD1;-webkit-text-size-adjust:100%}
+body{margin:0;background:#1F3FD1;color:#F6EFE2;font-family:'DM Sans',system-ui,sans-serif;font-size:17px;line-height:1.6}
+a{color:inherit}
+::selection{background:#FF5A4D;color:#0B0F2A}
+.wrap{max-width:760px;margin:0 auto;padding:clamp(40px,7vw,88px) max(24px,env(safe-area-inset-right)) max(56px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left))}
+.mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
+h1{margin:0;font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:clamp(56px,13vw,120px);line-height:.9;text-transform:uppercase}
+h2{margin:0 0 10px;font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:clamp(24px,4vw,32px);letter-spacing:.02em;text-transform:uppercase}
+.kick{margin:0 0 14px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#FFD23F}
+.card{margin-top:22px;background:#0B0F2A;border-radius:22px;padding:clamp(20px,4vw,32px)}
+.card p{margin:0 0 14px;color:#EDE6D6}
+label{display:block;font-weight:700;margin:0 0 8px}
+input,textarea{width:100%;font:500 16px/1.4 'JetBrains Mono',ui-monospace,monospace;color:#0B0F2A;background:#F6EFE2;border:2px solid #F6EFE2;border-radius:12px;padding:12px 14px;min-height:48px}
+textarea{resize:vertical;min-height:96px;word-break:break-all}
+input:focus-visible,textarea:focus-visible,a:focus-visible,button:focus-visible{outline:3px solid #FFD23F;outline-offset:3px}
+.row{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 24px;border-radius:999px;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;border:2px solid #F6EFE2;background:transparent;color:#F6EFE2;transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 160ms ease,color 160ms ease;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.btn.red{background:#FF5A4D;border-color:#FF5A4D;color:#0B0F2A}
+.btn:active{transform:scale(.97)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+@media (hover:hover) and (pointer:fine){.btn.red:hover{background:#fff;border-color:#fff}.btn:not(.red):hover{background:#F6EFE2;color:#0B0F2A}}
+.note{font-size:14.5px;color:#EDE6D6}
+.ok{color:#FFD23F;font-weight:700}
+.err{background:#FF5A4D;color:#0B0F2A;border-radius:12px;padding:12px 14px;font-weight:700}
+code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.9em;background:rgba(246,239,226,.12);padding:1px 6px;border-radius:6px;word-break:break-all}
+ol{margin:0;padding-left:1.2em;color:#EDE6D6}
+ol li{margin:0 0 8px}
+@media (prefers-reduced-motion:reduce){.btn{transition:none}.btn:active{transform:none}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<p class="kick mono">Solo para Carles · página privada</p>
+<h1>Conectar TikTok</h1>
+<p style="margin:18px 0 0;max-width:56ch;color:#EDE6D6">Desde aquí das permiso (solo de lectura) para que tu web muestre tu foto de perfil y tus vídeos de @zoqueteilustrado. No hace falta tocar nada más en esta página después de conectar.</p>
+
+<section class="card" id="paso-conectar" aria-labelledby="t1">
+<h2 id="t1">1 · Conectar</h2>
+<p>Pega la <b>Client key</b> de tu app de TikTok (está en developers.tiktok.com, en tu app). No es secreta: se guarda solo en este navegador.</p>
+<label for="ck">Client key</label>
+<input id="ck" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="aw1234abcd…">
+<p class="note" style="margin:12px 0 0">Dirección de vuelta que debes registrar en TikTok (Login Kit → Redirect URI), exactamente así:<br><code id="redir"></code></p>
+<div class="row">
+<button class="btn red" type="button" id="go">Conectar TikTok</button>
+<button class="btn" type="button" id="copy-redir">Copiar dirección de vuelta</button>
+</div>
+<p id="go-msg" class="note" role="status" style="margin:12px 0 0"></p>
+</section>
+
+<section class="card" id="paso-codigo" hidden aria-labelledby="t2">
+<h2 id="t2">2 · Pasa el código a GitHub</h2>
+<p class="ok" id="code-ok">TikTok ha dado permiso. Este es tu código de un solo uso; caduca pronto, así que haz el siguiente paso ahora.</p>
+<label for="code">Código</label>
+<textarea id="code" readonly></textarea>
+<div class="row">
+<button class="btn red" type="button" id="copy-code">Copiar código</button>
+<a class="btn" id="gh-link" href="#" target="_blank" rel="noopener">Abrir el proceso en GitHub</a>
+</div>
+<ol style="margin-top:18px">
+<li>En GitHub, pulsa <b>Run workflow</b>.</li>
+<li>Pega el código en el campo <b>Código de TikTok</b> y pulsa el botón verde <b>Run workflow</b>.</li>
+<li>Espera a que salga el tic verde (1–2 minutos) y mira la sección Redes de tu web.</li>
+</ol>
+</section>
+
+<section class="card" id="paso-error" hidden aria-labelledby="t3">
+<h2 id="t3">Algo no ha ido bien</h2>
+<p class="err" id="err-text" role="alert"></p>
+<div class="row"><a class="btn" href="conectar-tiktok.html">Empezar de nuevo</a></div>
+</section>
+
+<section class="card" aria-labelledby="t4">
+<h2 id="t4">Clave para cifrar (TOKEN_KEY)</h2>
+<p>Solo hace falta una vez. Genera una clave aleatoria aquí mismo (no sale de tu iPad), cópiala y guárdala en GitHub como el secreto <code>TOKEN_KEY</code>. Sirve para cifrar el acceso de TikTok dentro de tu repositorio.</p>
+<div class="row" style="margin-top:0">
+<button class="btn" type="button" id="gen">Generar clave</button>
+<button class="btn" type="button" id="copy-key" disabled>Copiar clave</button>
+</div>
+<label for="key" style="margin-top:16px">Clave generada</label>
+<input id="key" readonly autocomplete="off" spellcheck="false">
+<p class="note" style="margin:12px 0 0">Si un día la cambias en GitHub, tendrás que volver a conectar TikTok.</p>
+</section>
+
+<p class="note" style="margin-top:28px"><a href="./">← Volver al portfolio</a> · <a href="privacidad.html">Privacidad</a> · <a href="condiciones.html">Condiciones</a></p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var SCOPES = 'user.info.basic,video.list';
+  var redirectUri = location.origin + location.pathname;
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function rand(bytes) {
+    var a = new Uint8Array(bytes); crypto.getRandomValues(a);
+    var s = ''; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function copy(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(function () { btn.textContent = t; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    else fallback();
+    function fallback() { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove(); }
+  }
+
+  // ¿Repositorio? usuario.github.io/[repo]/
+  var owner = location.hostname.split('.')[0];
+  var seg = location.pathname.split('/').filter(Boolean);
+  var repo = (seg.length > 1) ? seg[0] : (owner + '.github.io');
+  document.getElementById('gh-link').href = 'https://github.com/' + owner + '/' + repo + '/actions/workflows/tiktok.yml';
+  document.getElementById('redir').textContent = redirectUri;
+
+  var ck = document.getElementById('ck');
+  ck.value = load('tt_client_key') || '';
+  ck.addEventListener('change', function () { store('tt_client_key', ck.value.trim() || null); });
+  document.getElementById('copy-redir').addEventListener('click', function () { copy(redirectUri, this); });
+
+  document.getElementById('go').addEventListener('click', function () {
+    var key = ck.value.trim();
+    var msg = document.getElementById('go-msg');
+    if (!/^[A-Za-z0-9_-]{8,}$/.test(key)) { msg.textContent = 'Pega primero la Client key.'; ck.focus(); return; }
+    store('tt_client_key', key);
+    var state = rand(24);
+    store('tt_state', state + '.' + Date.now());
+    var u = 'https://www.tiktok.com/v2/auth/authorize/'
+      + '?client_key=' + encodeURIComponent(key)
+      + '&scope=' + encodeURIComponent(SCOPES)
+      + '&response_type=code'
+      + '&redirect_uri=' + encodeURIComponent(redirectUri)
+      + '&state=' + encodeURIComponent(state);
+    location.assign(u);
+  });
+
+  // Vuelta desde TikTok
+  var q = new URLSearchParams(location.search);
+  if (q.has('code') || q.has('error')) {
+    // se guarda en localStorage (no sessionStorage) por si TikTok vuelve en otra pestaña
+    var saved = (load('tt_state') || '').split('.');
+    store('tt_state', null);
+    var expected = (saved.length === 2 && Date.now() - Number(saved[1]) < 30 * 60 * 1000) ? saved[0] : null;
+    // limpia la barra de direcciones para que el código no quede en el historial
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    document.getElementById('paso-conectar').hidden = true;
+    if (q.has('error')) {
+      showError('TikTok ha devuelto un error: ' + q.get('error') + (q.get('error_description') ? ' (' + q.get('error_description') + ')' : '') + '.');
+    } else if (!expected || q.get('state') !== expected) {
+      showError('La comprobación de seguridad no coincide. Vuelve a empezar desde este mismo navegador y sin cerrar la pestaña.');
+    } else {
+      var scopes = (q.get('scopes') || '').split(',');
+      document.getElementById('code').value = q.get('code');
+      if (scopes.indexOf('video.list') === -1) {
+        document.getElementById('code-ok').textContent = 'Aviso: no has dado permiso para ver la lista de vídeos. Vuelve a empezar y marca todas las casillas.';
+      }
+      document.getElementById('paso-codigo').hidden = false;
+    }
+  }
+  function showError(t) { document.getElementById('err-text').textContent = t; document.getElementById('paso-error').hidden = false; }
+  document.getElementById('copy-code').addEventListener('click', function () { copy(document.getElementById('code').value, this); });
+
+  var keyInput = document.getElementById('key'), copyKey = document.getElementById('copy-key');
+  document.getElementById('gen').addEventListener('click', function () { keyInput.value = rand(36); copyKey.disabled = false; });
+  copyKey.addEventListener('click', function () { copy(keyInput.value, this); });
+})();
+</script>
+</body>
+</html>
