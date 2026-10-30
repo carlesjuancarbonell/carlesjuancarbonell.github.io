@@ -1,0 +1,255 @@
+# Portfolio de Carles Juan Carbonell
+# 1) Publica la web en GitHub Pages cada vez que subes algo.
+# 2) Cada 6 horas pide a la API oficial de TikTok tu foto y tus últimos vídeos,
+#    guarda las miniaturas como archivos y actualiza data/tiktok.json.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TOKEN_KEY
+# Mientras falten, la parte de TikTok se salta y la web se publica igual.
+
+name: TikTok y web
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      code:
+        description: 'Código de TikTok (solo la primera vez o al reconectar)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tiktok-y-web
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ocultar el código en los registros
+        if: ${{ inputs.code != '' }}
+        env:
+          AUTH_CODE: ${{ inputs.code }}
+        run: echo "::add-mask::$AUTH_CODE"
+
+      - name: Actualizar TikTok
+        if: github.event_name != 'push'
+        env:
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TOKEN_KEY: ${{ secrets.TOKEN_KEY }}
+          AUTH_CODE: ${{ inputs.code }}
+          REDIRECT_URI: ${{ vars.TIKTOK_REDIRECT_URI }}
+        run: |
+          cat > /tmp/tiktok-sync.mjs <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+
+          const env = process.env;
+          const CK = (env.TIKTOK_CLIENT_KEY || '').trim();
+          const CS = (env.TIKTOK_CLIENT_SECRET || '').trim();
+          const TK = (env.TOKEN_KEY || '').trim();
+          const CODE = (env.AUTH_CODE || '').trim();
+          const TOKEN_FILE = '.tiktok/token.enc';
+          const DIR = 'media/tiktok';
+          const JSON_FILE = 'data/tiktok.json';
+          const MAX = 12;
+          const HANDLE = 'zoqueteilustrado';
+          const mask = (v) => { if (v) console.log(`::add-mask::${v}`); };
+
+          if (!CK || !CS || !TK) {
+            console.log('::notice::Faltan los secretos de TikTok. Se publica la web sin actualizar TikTok.');
+            process.exit(0);
+          }
+          if (TK.length < 24) throw new Error('TOKEN_KEY es demasiado corta: genera una en conectar-tiktok.html.');
+
+          // --- cifrado del token (AES-256-GCM con clave derivada de TOKEN_KEY) ---
+          const enc = (text) => {
+            const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12);
+            const key = crypto.scryptSync(TK, salt, 32);
+            const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+            const data = Buffer.concat([c.update(text, 'utf8'), c.final()]);
+            return JSON.stringify({ v: 1, salt: salt.toString('base64'), iv: iv.toString('base64'),
+              tag: c.getAuthTag().toString('base64'), data: data.toString('base64') });
+          };
+          const dec = (s) => {
+            const o = JSON.parse(s);
+            const key = crypto.scryptSync(TK, Buffer.from(o.salt, 'base64'), 32);
+            const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(o.iv, 'base64'));
+            d.setAuthTag(Buffer.from(o.tag, 'base64'));
+            return Buffer.concat([d.update(Buffer.from(o.data, 'base64')), d.final()]).toString('utf8');
+          };
+
+          // --- dirección de vuelta: la misma que usa conectar-tiktok.html ---
+          const [owner, repo] = env.GITHUB_REPOSITORY.split('/');
+          const host = `${owner.toLowerCase()}.github.io`;
+          const base = repo.toLowerCase() === host ? `https://${host}` : `https://${host}/${repo}`;
+          const REDIRECT = (env.REDIRECT_URI || '').trim() || `${base}/conectar-tiktok.html`;
+
+          async function getToken(params) {
+            const r = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cache-Control': 'no-cache' },
+              body: new URLSearchParams({ client_key: CK, client_secret: CS, ...params }),
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || !j.access_token) {
+              throw new Error(`TikTok no ha dado acceso (${j.error || r.status}: ${j.error_description || 'sin detalle'}). ` +
+                'Si es la primera vez, revisa la Client key, el Client secret y la dirección de vuelta. ' +
+                'Si ya funcionaba, vuelve a conectar desde conectar-tiktok.html.');
+            }
+            mask(j.access_token); mask(j.refresh_token);
+            return j;
+          }
+
+          let oldRefresh = null;
+          if (fs.existsSync(TOKEN_FILE)) {
+            try { oldRefresh = dec(fs.readFileSync(TOKEN_FILE, 'utf8')); }
+            catch { if (!CODE) throw new Error('No se puede descifrar el acceso guardado (¿has cambiado TOKEN_KEY?). Vuelve a conectar.'); }
+            mask(oldRefresh);
+          }
+
+          let tok;
+          if (CODE) {
+            console.log(`Conectando por primera vez con la dirección de vuelta ${REDIRECT}`);
+            tok = await getToken({ grant_type: 'authorization_code', code: CODE, redirect_uri: REDIRECT });
+          } else if (oldRefresh) {
+            tok = await getToken({ grant_type: 'refresh_token', refresh_token: oldRefresh });
+          } else {
+            console.log('::notice::TikTok aún no está conectado. Abre conectar-tiktok.html en tu web.');
+            process.exit(0);
+          }
+          const scopes = String(tok.scope || '').split(',');
+          if (!scopes.includes('video.list')) throw new Error('Falta el permiso video.list. Vuelve a conectar y acepta todos los permisos.');
+
+          // TikTok puede devolver un token de renovación nuevo: se guarda siempre el último.
+          if (tok.refresh_token && tok.refresh_token !== oldRefresh) {
+            fs.mkdirSync('.tiktok', { recursive: true });
+            fs.writeFileSync(TOKEN_FILE, enc(tok.refresh_token));
+            console.log('Acceso guardado (cifrado).');
+          }
+
+          async function api(url, body) {
+            const r = await fetch(url, {
+              method: body ? 'POST' : 'GET',
+              headers: { Authorization: `Bearer ${tok.access_token}`, 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || (j.error && j.error.code && j.error.code !== 'ok')) {
+              throw new Error(`API de TikTok: ${(j.error && j.error.code) || r.status} ${(j.error && j.error.message) || ''}`);
+            }
+            return j.data || {};
+          }
+
+          const user = (await api('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url,avatar_large_url')).user || {};
+
+          const FIELDS = 'id,title,video_description,cover_image_url,share_url,create_time,duration';
+          let videos = [], cursor;
+          for (let page = 0; page < 3 && videos.length < MAX; page++) {
+            const d = await api(`https://open.tiktokapis.com/v2/video/list/?fields=${FIELDS}`, cursor ? { max_count: 20, cursor } : { max_count: 20 });
+            videos.push(...(d.videos || []));
+            if (!d.has_more) break;
+            cursor = d.cursor;
+          }
+          videos = videos.filter((v) => /^\d+$/.test(String(v.id))).slice(0, MAX);
+
+          async function download(url, file) {
+            if (!url) return false;
+            const r = await fetch(url);
+            if (!r.ok) { console.log(`::warning::No se pudo descargar ${file} (${r.status})`); return false; }
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (fs.existsSync(file) && fs.readFileSync(file).equals(buf)) return true;
+            fs.writeFileSync(file, buf);
+            return true;
+          }
+
+          fs.mkdirSync(DIR, { recursive: true });
+          const avatarOk = await download(user.avatar_large_url || user.avatar_url, `${DIR}/avatar.jpg`);
+
+          const keep = new Set(['avatar.jpg']);
+          const list = [];
+          for (const v of videos) {
+            const name = `${v.id}.jpg`;
+            const file = `${DIR}/${name}`;
+            // las miniaturas de TikTok caducan a las 6 h: se guarda una copia propia
+            const ok = fs.existsSync(file) || await download(v.cover_image_url, file);
+            if (ok) keep.add(name);
+            list.push({
+              id: String(v.id),
+              title: String(v.title || v.video_description || '').trim().slice(0, 150),
+              url: String(v.share_url || `https://www.tiktok.com/@${HANDLE}/video/${v.id}`).split('?')[0],
+              cover: ok ? `${DIR}/${name}` : null,
+              date: v.create_time ? new Date(v.create_time * 1000).toISOString().slice(0, 10) : null,
+              duration: v.duration || null,
+            });
+          }
+          for (const f of fs.readdirSync(DIR)) if (!keep.has(f)) fs.unlinkSync(`${DIR}/${f}`);
+
+          const content = {
+            profile: {
+              name: user.display_name || HANDLE,
+              handle: HANDLE,
+              avatar: avatarOk ? `${DIR}/avatar.jpg` : null,
+              url: `https://www.tiktok.com/@${HANDLE}`,
+            },
+            videos: list,
+          };
+          let previous = null;
+          try { previous = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8')); } catch {}
+          const same = previous && JSON.stringify({ ...previous, updated: undefined }) === JSON.stringify({ ...content, updated: undefined });
+          if (!same) {
+            fs.mkdirSync('data', { recursive: true });
+            fs.writeFileSync(JSON_FILE, JSON.stringify({ updated: new Date().toISOString(), ...content }, null, 2) + '\n');
+          }
+          console.log(`Perfil: ${content.profile.name} · vídeos: ${list.length} · ${same ? 'sin cambios' : 'actualizado'}`);
+          NODE
+          node /tmp/tiktok-sync.mjs
+
+      - name: Guardar cambios en el repositorio
+        id: save
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for p in data media/tiktok .tiktok; do [ -e "$p" ] && git add -A "$p"; done
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "TikTok: actualizar foto y vídeos"
+            git pull --rebase --autostash origin main
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preparar la web
+        if: github.event_name != 'schedule' || steps.save.outputs.changed == 'true'
+        run: |
+          mkdir -p /tmp/_site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '.tiktok' --exclude 'para-github-actions' ./ /tmp/_site/
+          touch /tmp/_site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'schedule' || steps.save.outputs.changed == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'schedule' || steps.save.outputs.changed == 'true'
+        with:
+          path: /tmp/_site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+        if: github.event_name != 'schedule' || steps.save.outputs.changed == 'true'
