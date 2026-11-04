@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://carlesjuancarbonell.github.io/sitemap.xml
